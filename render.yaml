@@ -8,4 +8,4 @@ services:
     envVars:
       - fromDotenv: .env
       - key: PORT
-        value: 8080
+        value: "8080"
