@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: tech-toolkit-bot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - fromDotenv: .env
+      - key: PORT
+        value: 8080
