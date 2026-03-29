@@ -3,8 +3,8 @@ services:
     name: tech-toolkit-bot
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python bot.py
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python bot.py"
     envVars:
       - fromDotenv: .env
       - key: PORT
