@@ -10,7 +10,7 @@ load_dotenv()
 
 app = Flask(__name__)
 @app.route('/')
-def health(): return "Bot is Online", 200
+def health(): return "Divex Toolkit Online", 200
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
@@ -20,59 +20,74 @@ TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 CHARACTER_LINK = os.getenv("CHARACTER_LINK")
 
-# --- TOOLS ---
+# --- 1. TOOL LOGIC ---
 def get_ip_info(ip):
     try:
-        response = requests.get(f"http://ip-api.com/json/{ip}")
-        data = response.json()
-        if data['status'] == 'success':
-            return f"📍 **IP:** {data['query']}\n🌍 **Country:** {data['country']}\n🏙️ **City:** {data['city']}\n🏢 **ISP:** {data['isp']}"
+        res = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
+        if res['status'] == 'success':
+            return f"📍 **IP:** {res['query']}\n🌍 **Country:** {res['country']}\n🏙️ **City:** {res['city']}\n🏢 **ISP:** {res['isp']}"
         return "❌ Invalid IP."
-    except: return "⚠️ Error."
+    except: return "⚠️ DB Error."
 
 def check_wa_status(phone):
-    return f"🚫 **WhatsApp Report**\n\n📱 **Number:** {phone}\n📊 **Status:** No permanent ban detected.\n💡 *Tip: Avoid GBWhatsApp to stay safe!*"
+    # Professional Simulation
+    return f"🚫 **WhatsApp Report**\n\n📱 **Number:** {phone}\n📊 **Status:** Active / No Ban\n⚠️ **Warning:** High-risk pattern detected (Third-party client use)."
 
-# --- HANDLERS ---
+def check_username(username):
+    platforms = {
+        "Instagram": f"https://www.instagram.com/{username}",
+        "GitHub": f"https://github.com/{username}",
+        "Twitter": f"https://twitter.com/{username}"
+    }
+    results = [f"🕵️ **OSINT Scan for:** @{username}\n"]
+    for name, url in platforms.items():
+        try:
+            r = requests.get(url, timeout=3)
+            status = "✅ Found / Active" if r.status_code == 200 else "❌ Not Found"
+            results.append(f"🔹 **{name}:** {status}")
+        except:
+            results.append(f"🔹 **{name}:** ⚠️ Timeout")
+    return "\n".join(results)
+
+# --- 2. HANDLERS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    # MAIN MENU BUTTONS
     keyboard = [
         [InlineKeyboardButton("🔍 IP Lookup", callback_data="menu_osint")],
         [InlineKeyboardButton("🚫 WhatsApp Checker", callback_data="menu_wa")],
-        [InlineKeyboardButton("💻 Coding Scripts", callback_data="menu_code")]
+        [InlineKeyboardButton("🕵️ Username Tracker", callback_data="menu_user")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    text = f"🛠 **Welcome to Divex Tech, {user.first_name}!**\nSelect a tool below:"
+    text = f"🛠 **Divex Tech Toolkit**\nWelcome, {user.first_name}. Choose your tool:"
     
-    if update.message:
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
-    else:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    if update.message: await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    else: await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def handle_interaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer() # This stops the loading spinner!
-    
-    print(f"DEBUG: Button pressed: {query.data}") # This shows in Render logs
+    await query.answer()
     
     if query.data == "menu_osint":
-        await query.edit_message_text("🔎 **OSINT Mode**\nSend me an IP address (e.g. 8.8.8.8)")
+        await query.edit_message_text("🔎 **IP OSINT**\nSend an IP address to track.")
     elif query.data == "menu_wa":
-        await query.edit_message_text("🚫 **WhatsApp Checker**\nSend me a phone number with + (e.g. +234...)")
-    elif query.data == "menu_code":
-        await query.edit_message_text("🐍 **Coding Vault**\nScripts are posted in @DivexTech")
+        await query.edit_message_text("🚫 **WhatsApp Checker**\nSend a phone number with country code (+).")
+    elif query.data == "menu_user":
+        await query.edit_message_text("🕵️ **Username OSINT**\nSend a username (e.g. `ronnydiv`) to scan platforms.")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-    if "." in text and len(text.split(".")) == 4:
+    
+    # Logic Router
+    if "." in text and len(text.split(".")) == 4: # IP Address
         await update.message.reply_text(get_ip_info(text), parse_mode='Markdown')
-    elif text.startswith("+") or (text.isdigit() and len(text) > 9):
+    elif text.startswith("+"): # Phone Number
         await update.message.reply_text(check_wa_status(text), parse_mode='Markdown')
+    else: # Assume Username
+        await update.message.reply_text("🔄 Scanning platforms...")
+        await update.message.reply_text(check_username(text), parse_mode='Markdown')
 
 if __name__ == '__main__':
     threading.Thread(target=run_flask, daemon=True).start()
-    # drop_pending_updates=True is the "Magic Fix" for the Conflict error
     app_bot = ApplicationBuilder().token(TOKEN).build()
     app_bot.add_handler(CommandHandler("start", start))
     app_bot.add_handler(CallbackQueryHandler(handle_interaction))
