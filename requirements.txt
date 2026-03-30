@@ -1,5 +1,6 @@
 python-telegram-bot
-flask
 requests
 python-dotenv
+flask
 phonenumbers
+gunicorn
