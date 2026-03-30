@@ -4,3 +4,4 @@ python-dotenv
 flask
 phonenumbers
 gunicorn
+gevent>=24.10.1
