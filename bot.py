@@ -12,10 +12,8 @@ load_dotenv()
 
 # --- 1. WEB SERVER ---
 app = Flask(__name__)
-
 @app.route('/')
-def health():
-    return "OK", 200
+def health(): return "OK", 200
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
@@ -25,32 +23,35 @@ def run_flask():
 TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 
-# --- 3. TOOLS ---
+# --- 3. THE "EVIL" LOGIC ---
+def deep_leak_search(number):
+    # This targets known breach archives and database dumps
+    # It looks for the number inside raw text files indexed by Google
+    leak_url = f"https://www.google.com/search?q=%22{number}%22+filetype%3Atxt+OR+%22{number}%22+database+dump"
+    intel_url = f"https://intelx.io/?s={number}"
+    
+    return (f"💀 **DEEP LEAK SCAN: {number}** 💀\n\n"
+            f"Searching global breach archives for names, emails, and passwords linked to this target...\n\n"
+            f"🔓 [Open Database Archive]({leak_url})\n"
+            f"🔓 [IntelX Breach Search]({intel_url})\n\n"
+            f"⚠️ *If found, the real name of the owner will appear in the search results.*")
+
 def get_ip_info(ip):
     try:
         res = requests.get(f"http://ip-api.com/json/{ip}", timeout=10).json()
         if res['status'] == 'success':
-            return (f"📍 **IP OSINT**\n\n"
-                    f"🌐 **IP:** {res['query']}\n"
-                    f"🌍 **Country:** {res['country']}\n"
-                    f"🏙️ **City:** {res['city']}\n"
-                    f"🏢 **ISP:** {res['isp']}")
+            return f"📍 **IP OSINT**\n🌐 **IP:** {res['query']}\n🌍 **Country:** {res['country']}\n🏢 **ISP:** {res['isp']}"
         return "❌ Invalid IP."
-    except: return "⚠️ Connection error."
+    except: return "⚠️ Error."
 
-def deep_phone_osint(number):
+def standard_phone_osint(number):
     try:
         parsed_num = phonenumbers.parse(number)
-        if not phonenumbers.is_valid_number(parsed_num):
-            return "❌ Invalid format."
         ntype = phonenumbers.number_type(parsed_num)
         type_str = "📱 Real SIM" if ntype == 1 else "🌐 Virtual/VOIP"
         location = geocoder.description_for_number(parsed_num, "en")
         isp = carrier.name_for_number(parsed_num, "en")
-        search_url = f"https://www.google.com/search?q=%22{number}%22"
-        return (f"📞 **Phone OSINT**\n\n🔢 **Number:** {number}\n🛡️ **Type:** {type_str}\n"
-                f"📡 **Carrier:** {isp if isp else 'Private'}\n📍 **Location:** {location}\n\n"
-                f"🔗 [Search Socials]({search_url})")
+        return (f"📞 **Phone OSINT**\n🔢 **Number:** {number}\n🛡️ **Type:** {type_str}\n📡 **Carrier:** {isp}\n📍 **Loc:** {location}")
     except: return "❌ Use + format."
 
 # --- 4. HANDLERS ---
@@ -63,15 +64,20 @@ async def is_subscribed(context, user_id):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if await is_subscribed(context, user.id):
-        keyboard = [[InlineKeyboardButton("🔍 IP Lookup", callback_data="menu_osint")],
-                    [InlineKeyboardButton("📞 Phone OSINT", callback_data="menu_wa")]]
-        text = f"🛠 **Divex Tech Toolkit**\nSelect a tool:"
+        keyboard = [
+            [InlineKeyboardButton("🔍 IP Lookup", callback_data="menu_osint")],
+            [InlineKeyboardButton("📞 Phone OSINT", callback_data="menu_wa")],
+            [InlineKeyboardButton("🕵️ Username Tracker", callback_data="menu_user")],
+            [InlineKeyboardButton("💀 Deep Leak Search", callback_data="menu_leak")]
+        ]
+        text = f"🛠 **Divex Tech: Underground Toolkit**\nTarget locked. Select your method:"
         reply_markup = InlineKeyboardMarkup(keyboard)
     else:
-        keyboard = [[InlineKeyboardButton("📢 Join Channel", url="https://t.me/divextech")],
+        keyboard = [[InlineKeyboardButton("📢 Join @DivexTech", url="https://t.me/divextech")],
                     [InlineKeyboardButton("🔄 Verify Access", callback_data="verify")]]
-        text = "❌ **Access Locked**\nJoin @DivexTech to unlock."
+        text = "❌ **Access Denied**\nJoin the channel to use these tools."
         reply_markup = InlineKeyboardMarkup(keyboard)
+    
     if update.message: await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     else: await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
@@ -79,29 +85,35 @@ async def handle_interaction(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     if query.data == "verify": await start(update, context)
-    elif query.data == "menu_osint": await query.edit_message_text("🔎 Send an IP.")
+    elif query.data == "menu_osint": await query.edit_message_text("🔎 Send an IP address.")
     elif query.data == "menu_wa": await query.edit_message_text("📞 Send a number with (+).")
+    elif query.data == "menu_user": await query.edit_message_text("🕵️ Send a username.")
+    elif query.data == "menu_leak": await query.edit_message_text("💀 **Deep Leak Search**\nSend the target's number with (+) code.\nI will scan for data breach footprints.")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(context, update.effective_user.id):
         await start(update, context)
         return
     text = update.message.text.strip()
+    
+    # Logic to distinguish between Leak search and Standard OSINT
+    # We can use a simple check or just let the user pick from the menu first
     if "." in text and len(text.split(".")) == 4:
         await update.message.reply_text(get_ip_info(text), parse_mode='Markdown')
     elif text.startswith("+"):
-        await update.message.reply_text(deep_phone_osint(text), parse_mode='Markdown')
+        # For now, let's provide BOTH if they just send a number
+        # Or you can tell them to use the menu button first
+        await update.message.reply_text(standard_phone_osint(text), parse_mode='Markdown')
+        await update.message.reply_text(deep_leak_search(text), parse_mode='Markdown')
     else:
-        await update.message.reply_text(f"🕵️ **Search: @{text}**\n\n🔗 [Scan Socials](https://www.google.com/search?q=site%3Ainstagram.com+{text})", parse_mode='Markdown')
+        await update.message.reply_text(f"🕵️ **Search: @{text}**\n\n[Scan Socials](https://www.google.com/search?q=site%3Ainstagram.com+{text})", parse_mode='Markdown')
 
 # --- 5. STARTUP ---
 if __name__ == '__main__':
     threading.Thread(target=run_flask, daemon=True).start()
-    application = ApplicationBuilder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(handle_interaction))
-    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
-    
-    print("Bot is listening...")
-    # Clean run with no conflicting arguments
-    application.run_polling(drop_pending_updates=True)
+    app_bot = ApplicationBuilder().token(TOKEN).build()
+    app_bot.add_handler(CommandHandler("start", start))
+    app_bot.add_handler(CallbackQueryHandler(handle_interaction))
+    app_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
+    print("Underground Toolkit Online...")
+    app_bot.run_polling(drop_pending_updates=True)
